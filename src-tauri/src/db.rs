@@ -1,12 +1,11 @@
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use sqlx::SqlitePool;
 use std::path::PathBuf;
-use std::str::FromStr;
-
 use crate::error::AppResult;
 
-pub async fn init_pool(db_path: &str) -> AppResult<SqlitePool> {
-    let options = SqliteConnectOptions::from_str(db_path)?
+pub async fn init_pool(db_path: &std::path::Path) -> AppResult<SqlitePool> {
+    let options = SqliteConnectOptions::new()
+        .filename(db_path)
         .create_if_missing(true)
         .foreign_keys(true)
         .journal_mode(sqlx::sqlite::SqliteJournalMode::Wal);
@@ -22,24 +21,34 @@ pub async fn init_pool(db_path: &str) -> AppResult<SqlitePool> {
 }
 
 pub fn database_path() -> Result<PathBuf, String> {
-    let home = std::env::var_os("HOME")
-        .map(PathBuf::from)
-        .ok_or_else(|| "Could not determine the home directory".to_owned())?;
-
-    #[cfg(target_os = "macos")]
-    let directory = home.join("Library/Application Support/com.kankan.app");
-
     #[cfg(target_os = "windows")]
-    let directory = std::env::var_os("APPDATA")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| home.join("AppData/Roaming"))
-        .join("com.kankan.app");
+    let directory = {
+        let home = std::env::var_os("USERPROFILE")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from(r"C:\Users"));
+        std::env::var_os("APPDATA")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| home.join("AppData/Roaming"))
+            .join("com.kankan.app")
+    };
 
-    #[cfg(all(unix, not(target_os = "macos")))]
-    let directory = std::env::var_os("XDG_DATA_HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| home.join(".local/share"))
-        .join("com.kankan.app");
+    #[cfg(not(target_os = "windows"))]
+    let directory = {
+        let home = std::env::var_os("HOME")
+            .map(PathBuf::from)
+            .ok_or_else(|| "Could not determine the home directory".to_owned())?;
+
+        #[cfg(target_os = "macos")]
+        let dir = home.join("Library/Application Support/com.kankan.app");
+
+        #[cfg(all(unix, not(target_os = "macos")))]
+        let dir = std::env::var_os("XDG_DATA_HOME")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| home.join(".local/share"))
+            .join("com.kankan.app");
+
+        dir
+    };
 
     std::fs::create_dir_all(&directory)
         .map_err(|error| format!("Could not create {}: {error}", directory.display()))?;

@@ -200,8 +200,7 @@ impl KankanApp {
         };
         let setup = runtime.block_on(async {
             let path = db::database_path().map_err(crate::error::AppError::Other)?;
-            let url = format!("sqlite://{}", path.to_string_lossy());
-            let pool = db::init_pool(&url).await?;
+                        let pool = db::init_pool(&path).await?;
             db::seed_if_empty(&pool).await?;
             Ok::<_, crate::error::AppError>(Repository::new(pool))
         });
